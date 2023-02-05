@@ -35,6 +35,7 @@ public class Typing implements Pvisitor {
 	public void visit(Pint n) {
 		// TODO Auto-generated method stub
 		
+		throw new Error("not a int");
 	}
 
 	@Override

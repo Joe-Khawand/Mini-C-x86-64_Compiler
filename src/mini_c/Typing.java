@@ -13,6 +13,7 @@ public class Typing implements Pvisitor {
 	
 	// il faut compléter le visiteur ci-dessous pour réaliser le typage
 	
+	/* types */
 	@Override
 	public void visit(Pfile n) {
 		// TODO Auto-generated method stub
@@ -31,11 +32,13 @@ public class Typing implements Pvisitor {
 		
 	}
 
+	/* expressions */
 	@Override
 	public void visit(Pint n) {
 		// TODO Auto-generated method stub
-		
-		throw new Error("not a int");
+		if (this.n == null) {
+			throw new Error("not a int");
+		}
 	}
 
 	@Override
@@ -80,6 +83,7 @@ public class Typing implements Pvisitor {
 		
 	}
 
+	/* instructions */
 	@Override
 	public void visit(Pskip n) {
 		// TODO Auto-generated method stub
@@ -116,6 +120,7 @@ public class Typing implements Pvisitor {
 		
 	}
 
+	/* others */
 	@Override
 	public void visit(Pstruct n) {
 		// TODO Auto-generated method stub

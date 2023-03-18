@@ -5,6 +5,7 @@ import java.util.LinkedList;
 
 abstract class Typ {
 	abstract void accept(Visitor v);
+	abstract boolean equals(Typ t);
 }
 
 class Tint extends Typ {
@@ -17,6 +18,13 @@ class Tint extends Typ {
 	public String toString() {
 	  return "int";
 	}
+	@Override
+    boolean equals(Typ t) {
+        String s = t.toString();
+        boolean p1 = s.equals(this.toString());
+        boolean p2 = s.equals("typenull");
+        return p1 || p2;
+    }
 }
 
 class Tstructp extends Typ {
@@ -33,6 +41,14 @@ class Tstructp extends Typ {
 	public String toString() {
 	  return "struct " + s.str_name + "*";
 	}
+	@Override
+    boolean equals(Typ t) {
+        String s = t.toString();
+        boolean p1 = s.equals(this.toString());
+        boolean p2 = s.equals("typenull");
+        boolean p3 = s.equals("void*");
+        return p1 || p2 || p3;
+    }
 }
 
 class Tvoidstar extends Typ {
@@ -46,6 +62,14 @@ class Tvoidstar extends Typ {
 	public String toString() {
 	  return "void*";
 	}
+	@Override
+    boolean equals(Typ t) {
+        String s = t.toString();
+        boolean p1 = s.equals(this.toString());
+        boolean p2 = s.startsWith("struct ");
+		boolean p3 = s.endsWith("*");
+        return p1 || (p2 && p3);
+    }
 }
 
 class Ttypenull extends Typ {
@@ -59,6 +83,15 @@ class Ttypenull extends Typ {
 	public String toString() {
 	  return "typenull";
 	}
+	@Override
+    boolean equals(Typ t) {
+        String s = t.toString();
+        boolean p1 = s.equals(this.toString());
+        boolean p2 = s.equals("int");
+        boolean p3 = s.startsWith("struct ");
+		boolean p4 = s.endsWith("*");
+        return p1 || p2 || (p3 && p4);
+    }
 }
 
 class Structure {

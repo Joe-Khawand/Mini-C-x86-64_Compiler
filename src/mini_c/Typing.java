@@ -35,7 +35,7 @@ public class Typing implements Pvisitor {
 	// il faut compléter le visiteur ci-dessous pour réaliser le typage
 	
 	/* types */
-	th@Override
+	@Override
 	public void visit(Pfile n) {
 		// TODO Auto-generated method stub
 		boolean mainIsPresent = false;

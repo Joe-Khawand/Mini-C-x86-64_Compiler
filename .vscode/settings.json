@@ -1,0 +1,10 @@
+{
+    "java.project.sourcePaths": [
+        "src/mini_c"
+    ],
+    "java.project.outputPath": "bin/mini_c",
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar"
+    ],
+    "java.dependency.packagePresentation": "hierarchical"
+}

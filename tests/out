@@ -1,0 +1,25 @@
+ERfuns
+[mini_c.ERTLfun@63961c42]
+== ERTL =========================
+main(0)
+  entry  : L18
+  locals : [#10, #11, #7, #8, #9]
+  L18: alloc_frame --> L19
+  L19: Mmov %rbx #7 --> L20
+  L20: Mmov %r12 #8 --> L21
+  L21: Mmov %r13 #9 --> L22
+  L22: Mmov %r14 #10 --> L23
+  L23: Mmov %r15 #11 --> L24
+  L24: goto L17
+  L17: mov $10 #4 --> L16
+  L16: Mmov #4 #2 --> L15
+  L15: Mmov #2 #4 --> L14
+  L14: jnz #4 --> L13, L4
+  L13: Mmov #2 #4 --> L12
+  L12: mov $1 #6 --> L11
+  L11: Msub #6 #4 --> L10
+  L10: Mmov #4 #2 --> L9
+   L9: mov $65 #4 --> L8
+   L8: Mmov #2 #5 --> L7
+   L7: Madd #5 #4 --> L6
+   L4: mov $10 #3 --> L3

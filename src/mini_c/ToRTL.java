@@ -123,54 +123,21 @@ public class ToRTL implements Visitor {
 
     @Override
     public void visit(Eunop n) {
-        if (n.u == Unop.Uneg) {
-            Register r1 = new Register();
-            entry = graph.add(new Rmbinop(Mbinop.Msub, r1, target, entry));
-            entry = graph.add(new Rconst(0, target, entry));
-            target = r1;
-            n.e.accept(this);
-        } else {
-            if (OPTIMIZE_CHOICE_OF_INSTR && n.e instanceof Eunop) {
-                Eunop subE = (Eunop) n.e;
-                if (subE.u == Unop.Uneg) {
-                    // Ca ne sert à rien de faire le moins
-                    n.e = subE.e;
-                } else {
-                    // Ca ne sert à rien de faire not not
-                    (new Ebinop(Binop.Bneq, new Econst(0), subE.e)).accept(this);
-                    return;
-                }
-            }
-
-            if (OPTIMIZE_CHOICE_OF_INSTR && n.e instanceof Ebinop) {
-                Ebinop subE = (Ebinop) n.e;
-                switch (subE.b) {
-                    case Beq:
-                        (new Ebinop(Binop.Bneq, subE.e1, subE.e2)).accept(this);
-                        return;
-                    case Bneq:
-                        (new Ebinop(Binop.Beq, subE.e1, subE.e2)).accept(this);
-                        return;
-                    case Blt:
-                        (new Ebinop(Binop.Bge, subE.e1, subE.e2)).accept(this);
-                        return;
-                    case Ble:
-                        (new Ebinop(Binop.Bgt, subE.e1, subE.e2)).accept(this);
-                        return;
-                    case Bgt:
-                        (new Ebinop(Binop.Ble, subE.e1, subE.e2)).accept(this);
-                        return;
-                    case Bge:
-                        (new Ebinop(Binop.Blt, subE.e1, subE.e2)).accept(this);
-                        return;
-                    default:
-                        break;
-                }
-            }
-
-            entry = graph.add(new Rmunop(new Msetei(0), target, entry));
-            n.e.accept(this);
-        }
+        switch (e.u) {
+      case Uneg:
+        Register r = new Register();
+        entry =
+          graph.add(new Rmbinop(Mbinop.Msub, r, currentRegister, entry));
+        entry = graph.add(new Rconst(0, r, entry));
+        currentRegister = r;
+        e.e.accept(this);
+        break;
+      case Unot:
+        entry =
+          graph.add(new Rmunop(new Msetei(0), currentRegister, entry));
+        e.e.accept(this);
+        break;
+    }
     }
 
     @Override
@@ -199,35 +166,46 @@ public class ToRTL implements Visitor {
             entry = graph.add(new Rmubranch(op, target, oldEntry, secondLabel));
             n.e1.accept(this);
         } else {
-            if (OPTIMIZE_CHOICE_OF_INSTR && (n.b == Binop.Beq || n.b == Binop.Bneq || n.b == Binop.Badd) && (n.e1 instanceof Econst || n.e2 instanceof Econst)) {
-                int constant = n.e1 instanceof Econst ? ((Econst) n.e1).i : ((Econst) n.e2).i;
-                Munop op;
-                switch (n.b) {
-                    case Beq:
-                        op = new Msetei(constant);
-                        break;
-                    case Bneq:
-                        op = new Msetnei(constant);
-                        break;
-                    case Badd:
-                        op = new Maddi(constant);
-                        break;
-                    default:
-                        throw new IllegalStateException("Unexpected value: " + n.b);
-                }
-                entry = graph.add(new Rmunop(op, target, entry));
-                if (n.e1 instanceof Econst)
-                    n.e2.accept(this);
-                else
-                    n.e1.accept(this);
-                return;
+            Mbinop mbinop = null;
+            switch (ebinop.b) {
+                case Beq:
+                    mbinop = Mbinop.Msete;
+                    break;
+                case Bneq:
+                    mbinop = Mbinop.Msetne;
+                    break;
+                case Blt:
+                    mbinop = Mbinop.Msetl;
+                    break;
+                case Ble:
+                    mbinop = Mbinop.Msetle;
+                    break;
+                case Bgt:
+                    mbinop = Mbinop.Msetg;
+                    break;
+                case Bge:
+                    mbinop = Mbinop.Msetge;
+                    break;
+                case Badd:
+                    mbinop = Mbinop.Madd;
+                    break;
+                case Bsub:
+                    mbinop = Mbinop.Msub;
+                    break;
+                case Bmul:
+                    mbinop = Mbinop.Mmul;
+                    break;
+                case Bdiv:
+                    mbinop = Mbinop.Mdiv;
+                    break;
             }
-
             Register r1 = new Register();
-            entry = graph.add(new Rmbinop(Mbinop.construct(n.b), r1, target, entry));
-            n.e1.accept(this);
+            Register r2 = target;
+            entry = graph.add(new Rmbinop(mbinop, r1, r2, entry));
             target = r1;
-            n.e2.accept(this);
+            ebinop.e2.accept(this);
+            target = r2;
+            ebinop.e1.accept(this);
         }
     }
 
@@ -263,127 +241,40 @@ public class ToRTL implements Visitor {
         n.e.accept(this);
     }
 
-    RTL parseBiBranch(Mbbranch mbbranch, Label ltrue, Label lfalse, Expr e1, Expr e2) {
-        Register r1 = new Register();
-        RTL instr = new Rmbbranch(mbbranch, target, r1, ltrue, lfalse);
-        entry = graph.add(instr);
-        e2.accept(this);
-        target = r1;
-        e1.accept(this);
-        return instr;
-    }
-
-    RTL parseBiBranch(Ebinop ebinop, Label ltrue, Label lfalse) {
-        switch (ebinop.b) {
-            case Ble:
-                return parseBiBranch(Mbbranch.Mjle, ltrue, lfalse, ebinop.e1, ebinop.e2);
-            case Blt:
-                return parseBiBranch(Mbbranch.Mjl, ltrue, lfalse, ebinop.e1, ebinop.e2);
-            case Bge:
-                return parseBiBranch(Mbbranch.Mjle, ltrue, lfalse, ebinop.e2, ebinop.e1);
-            case Bgt:
-                return parseBiBranch(Mbbranch.Mjl, ltrue, lfalse, ebinop.e2, ebinop.e1);
-            case Beq:
-                return parseBiBranch(Mbbranch.Mjeq, ltrue, lfalse, ebinop.e1, ebinop.e2);
-            case Bneq:
-                return parseBiBranch(Mbbranch.Mjneq, ltrue, lfalse, ebinop.e1, ebinop.e2);
-            default:
-                throw new ToRTLError("Parse bi branch for branch " + ebinop.b + " not yet implemented.");
-        }
-    }
-
-    RTL parseBranch(Expr e, Label ltrue, Label lfalse) {
-        target = new Register();
-        RTL instr;
-
-        if (OPTIMIZE_CHOICE_OF_INSTR && e instanceof Econst) {
-            instr = new Rgoto(((Econst) e).i != 0 ? ltrue : lfalse);
-
-        } else if (OPTIMIZE_CHOICE_OF_INSTR && e instanceof Eunop) {
-            Mubranch mubranch = ((Eunop) e).u == Unop.Unot ? new Mjz() : new Mjnz();
-            instr = new Rmubranch(mubranch, target, ltrue, lfalse);
-            e = ((Eunop) e).e;
-
-        } else if (OPTIMIZE_CHOICE_OF_INSTR && e instanceof Ebinop) {
-            switch (((Ebinop) e).b) {
-                case Blt:
-                case Bgt:
-                case Bge:
-                case Ble:
-                case Beq:
-                case Bneq:
-                    return parseBiBranch((Ebinop) e, ltrue, lfalse);
-
-                default:
-                    Mubranch mubranch = new Mjnz();
-                    instr = new Rmubranch(mubranch, target, ltrue, lfalse);
-                    break;
-            }
-
-        } else {
-            Mubranch mubranch = new Mjnz();
-            instr = new Rmubranch(mubranch, target, ltrue, lfalse);
-        }
-
-        entry = graph.add(instr);
-        e.accept(this);
-        return instr;
-    }
 
     @Override
     public void visit(Sif n) {
-        /*
-        endEntry:
-            Eval if and go to the right label (done with parse branch)
-        Lleft:
-            Instructions if false
-        Ltrue:
-            Instructions if true
-        oldEntry:
-            Instructions after if
-         */
-        Label oldEntry = entry;
-        n.s1.accept(this);
-        Label ltrue = entry;
-        entry = oldEntry;
+        Label l = entry;
         n.s2.accept(this);
-        Label lfalse = entry;
-        parseBranch(n.e, ltrue, lfalse);
+        Label lTrue = entry;
+        entry = l;
+        n.s1.accept(this);
+        Label lFalse = entry;
+        Register r1 = new Register();
+        entry = graph.add(new Rmubranch(new Mjnz(), r1, lTrue, lFalse));
+        target = r1;
+        n.e.accept(this);
     }
 
     @Override
     public void visit(Swhile n) {
-        /*
-        endEntry:
-            jmp to ifEntry (ie on fait rien, juste on remet entry à ifEntry à la fin)
-        corps:
-            Corps de la fonction
-        ifEntry:
-            Eval if and go to the right label (done with parse branch)
-        oldEntry:
-            Instructions after while
-        */
-        Label corps = new Label(); // to destroy after
-        RTL ifInstr = parseBranch(n.e, corps, entry);
-        Label ifEntry = entry;
+        Label ld = entry;
+        Label lGoto = new Label();
+        entry = lGoto;
         n.s.accept(this);
-        Label newCorps = entry;
-
-        if (ifInstr instanceof Rmubranch)
-            ((Rmubranch) ifInstr).l1 = newCorps;
-        if (ifInstr instanceof Rmbbranch)
-            ((Rmbbranch) ifInstr).l1 = newCorps;
-
-        entry = ifEntry;
+        entry = graph.add(new Rmubranch(new Mjnz(), target, entry, ld));
+        n.e.accept(this);
+        graph.graph.put(lGoto, new Rgoto(entry));
     }
 
     @Override
     public void visit(Sblock n) {
-        for (Decl_var v : n.dl)
-            fun.locals.add(v.register);
-
-        for (Iterator<Stmt> it = n.sl.descendingIterator(); it.hasNext(); )
-            it.next().accept(this);
+        for (int i = 0; i < n.dl.size(); i++) {
+            n.dl.get(i).accept(this);
+        }
+        for (int i = n.sl.size() - 1; i >= 0; i--) {
+            n.sl.get(i).accept(this);
+        }
     }
 
     @Override

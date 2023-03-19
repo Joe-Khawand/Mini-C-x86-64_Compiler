@@ -8,7 +8,7 @@ struct L {
 /* liste réduite à un élément */
 struct L* make(int v) {
   struct L* r;
-  r = sbrk(sizeof(struct L));
+  r = malloc(sizeof(struct L));
   r->valeur = v;
   r->suivant = r->precedent = r;
   return r;

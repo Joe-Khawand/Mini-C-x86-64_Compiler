@@ -6,9 +6,9 @@ struct S { int a; struct U *u; int b; };
 int main() {
   struct U *u;
   struct S *s;
-  u = sbrk(sizeof(struct U));
-  s = sbrk(sizeof(struct S));
-  s->u = sbrk(sizeof(struct U));
+  u = malloc(sizeof(struct U));
+  s = malloc(sizeof(struct S));
+  s->u = malloc(sizeof(struct U));
   s->a = 'A';
   s->b = 'B';
   s->u->x = 'x';

@@ -4,7 +4,7 @@ struct S { int a; int b; };
 int main() {
   struct S *s;
   struct S *p;
-  s = sbrk(sizeof(struct S));
+  s = malloc(sizeof(struct S));
   p = s;
   p->a = 'A';
   putchar(s->a);

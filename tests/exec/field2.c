@@ -3,7 +3,7 @@ struct S { int a; int b; };
 
 int main() {
   struct S *s;
-  s = sbrk(sizeof(struct S));
+  s = malloc(sizeof(struct S));
   s->a = 'A';
   putchar(s->a);
   s->b = 'B';

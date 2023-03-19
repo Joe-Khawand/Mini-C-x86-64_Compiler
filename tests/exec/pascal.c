@@ -16,7 +16,7 @@ int set(struct List *l, int i, int v) {
 struct List* create(int n) {
   struct List *r;
   if (n == 0) return 0;
-  r = sbrk(sizeof(struct List));
+  r = malloc(sizeof(struct List));
   r->head = 0;
   r->next = create(n-1);
   return r;

@@ -7,10 +7,10 @@ struct ABR {
 
 struct ABR* make(int v, struct ABR *g, struct ABR *d) {
   struct ABR * s;
-  s = sbrk(sizeof(struct ABR));
-  s->valeur = v;
-  s->gauche = g;
+  s = malloc(sizeof(struct ABR));
   s->droite = d;
+  s->gauche = g;
+  s->valeur = v;
   return s;
 }
 

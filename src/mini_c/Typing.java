@@ -1,4 +1,6 @@
 package mini_c;
+import java.util.HashMap;
+import java.util.LinkedList;
 
 public class Typing implements Pvisitor {
 
@@ -33,7 +35,7 @@ public class Typing implements Pvisitor {
 
 
 	// il faut compléter le visiteur ci-dessous pour réaliser le typage
-	
+
 	/* types */
 	@Override
 	public void visit(Pfile n) {

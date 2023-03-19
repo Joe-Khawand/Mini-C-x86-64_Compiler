@@ -1,8 +1,6 @@
 {
-    "java.project.sourcePaths": [
-        "src/mini_c"
-    ],
-    "java.project.outputPath": "bin/mini_c",
+    "java.project.sourcePaths": ["src"],
+    "java.project.outputPath": "bin",
     "java.project.referencedLibraries": [
         "lib/**/*.jar"
     ],

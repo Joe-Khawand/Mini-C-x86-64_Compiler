@@ -1,321 +1,322 @@
 package mini_c;
 
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import javax.naming.ldap.ExtendedRequest;
 
-public class ToRTL implements Visitor {
-    RTLfun fun;
-    RTLfile file;
-    RTLgraph graph;
-    Label entry;
-    Register target;
+public class ToRTL extends EmptyVisitor {
 
-    final static boolean OPTIMIZE_CHOICE_OF_INSTR = true;
+  RTLfile Rfile;
+  // Functions translated
+  LinkedList<RTLfun> Rfuns = new LinkedList<RTLfun>();
 
-    @Override
-    public void visit(Unop n) {
+  // Current translated function with its attributes not yet computed
+  RTLfun Rfun;
+  Label exitLabel;
+  Register result;
+  RTLgraph graph;
 
+  Register currentRegister;
+
+  HashMap<String, Register> varAsReg = new HashMap<String, Register>();
+  HashMap<String, Register> argAsReg = new HashMap<String, Register>();
+  boolean isReturn = false;
+  Register dstRegister;
+
+  Label nextLabel;
+
+  RTLfile translate(File f) {
+    visit(f);
+    return Rfile;
+  }
+
+  public void visit(File f) {
+    Rfile = new RTLfile();
+    for (Decl_fun fun : f.funs) {
+      visit(fun);
+    }
+    Rfile.funs = Rfuns;
+  }
+
+  public void visit(Decl_fun fun) {
+    Rfun = new RTLfun(fun.fun_name);
+    exitLabel = new Label();
+    Rfun.exit = exitLabel;
+
+    result = new Register();
+
+    graph = new RTLgraph();
+
+    nextLabel = exitLabel;
+    for (int i = 0; i < fun.fun_formals.size(); i++) {
+      Register r = new Register();
+      Rfun.formals.add(r);
+      varAsReg.put(fun.fun_formals.get(i).name, r);
     }
 
-    @Override
-    public void visit(Binop n) {
-
+    if (fun.fun_body != null) {
+      fun.fun_body.accept(this);
     }
 
-    @Override
-    public void visit(String n) {
+    Rfun.result = result;
+    Rfun.entry = nextLabel;
+    Rfun.body = graph;
 
+    Rfuns.add(Rfun);
+  }
+
+  public void visit(Sblock sblock) {
+    for (int i = 0; i < sblock.dl.size(); i++) {
+      sblock.dl.get(i).accept(this);
     }
 
-    @Override
-    public void visit(Tint n) {
-
+    for (int i = sblock.sl.size() - 1; i >= 0; i--) {
+      sblock.sl.get(i).accept(this);
     }
+  }
 
-    @Override
-    public void visit(Tstructp n) {
+  public void visit(Sreturn sreturn) {
+    nextLabel = exitLabel;
+    currentRegister = result;
+    sreturn.e.accept(this);
+  }
 
-    }
+  public void visit(Econst e) {
+    nextLabel = graph.add(new Rconst(e.i, currentRegister, nextLabel));
+  }
 
-    @Override
-    public void visit(Tvoidstar n) {
-
-    }
-
-    @Override
-    public void visit(Ttypenull n) {
-
-    }
-
-    @Override
-    public void visit(Structure n) {
-
-    }
-
-    @Override
-    public void visit(Field n) {
-
-    }
-
-    @Override
-    public void visit(Decl_var n) {
-
-    }
-
-    @Override
-    public void visit(Expr n) {
-
-    }
-
-    @Override
-    public void visit(Econst n) {
-        RTL instr = new Rconst(n.i, target, entry);
-        entry = graph.add(instr);
-    }
-
-    @Override
-    public void visit(Eaccess_local n) {
-        entry = graph.add(new Rmbinop(Mbinop.Mmov, n.v.register, target, entry));
-    }
-
-    @Override
-    public void visit(Eaccess_field n) {
-        /* Target code:
-        r1 = variable at n.name
-        mov i(r1) target
-         */
-        Register realTarget = target;
-        target = new Register();
-        entry = graph.add(new Rload(target, n.f.pos * 8, realTarget, entry));
-        n.e.accept(this);
-    }
-
-    @Override
-    public void visit(Eassign_local n) {
-        // On ne garde pas le résultat si on en a pas besoin
-        if (target != null)
-            entry = graph.add(new Rmbinop(Mbinop.Mmov, n.v.register, target, entry));
-        target = n.v.register;
-        n.e.accept(this);
-    }
-
-    @Override
-    public void visit(Eassign_field n) {
-        /* Target code:
-        r1 = variable at n.name
-        target = visit(n.e)
-        mov target i(r1)
-         */
-
-        // Ici, même si on n'a pas besoin du résultat, on est obligé de le stocker dans un pseudo-registre
-        if (target == null)
-            target = new Register();
-
-        Register realTarget = target;
-        Register variable = new Register();
-        entry = graph.add(new Rstore(realTarget, variable, n.f.pos * 8, entry));
-        target = variable;
-        n.e1.accept(this);
-        target = realTarget;
-        n.e2.accept(this);
-    }
-
-    @Override
-    public void visit(Eunop n) {
-        switch (e.u) {
+  public void visit(Eunop e) {
+    switch (e.u) {
       case Uneg:
         Register r = new Register();
-        entry =
-          graph.add(new Rmbinop(Mbinop.Msub, r, currentRegister, entry));
-        entry = graph.add(new Rconst(0, r, entry));
+
+        nextLabel =
+          graph.add(new Rmbinop(Mbinop.Msub, r, currentRegister, nextLabel));
+
+        nextLabel = graph.add(new Rconst(0, r, nextLabel));
+
         currentRegister = r;
         e.e.accept(this);
         break;
       case Unot:
-        entry =
-          graph.add(new Rmunop(new Msetei(0), currentRegister, entry));
+        nextLabel =
+          graph.add(new Rmunop(new Msetei(0), currentRegister, nextLabel));
         e.e.accept(this);
         break;
     }
+  }
+
+  public void visit(Ebinop ebinop) {
+    boolean band = false;
+    boolean bor = false;
+    Mbinop mbinop = null;
+    switch (ebinop.b) {
+      case Beq:
+        mbinop = Mbinop.Msete;
+        break;
+      case Bneq:
+        mbinop = Mbinop.Msetne;
+        break;
+      case Blt:
+        mbinop = Mbinop.Msetl;
+        break;
+      case Ble:
+        mbinop = Mbinop.Msetle;
+        break;
+      case Bgt:
+        mbinop = Mbinop.Msetg;
+        break;
+      case Bge:
+        mbinop = Mbinop.Msetge;
+        break;
+      case Badd:
+        mbinop = Mbinop.Madd;
+        break;
+      case Bsub:
+        mbinop = Mbinop.Msub;
+        break;
+      case Bmul:
+        mbinop = Mbinop.Mmul;
+        break;
+      case Bdiv:
+        mbinop = Mbinop.Mdiv;
+        break;
+      case Band:
+        band = true;
+        break;
+      case Bor:
+        bor = true;
+        break;
     }
 
-    @Override
-    public void visit(Ebinop n) {
-        if (n.b == Binop.Band || n.b == Binop.Bor) {
-            /* Targetted code:
-            EndEntry:
-                Instruction to compute left part into target
-                for AND:
-                    if target is null, goto oldEntry, else to secondbranchment
-                for OR:
-                    if target is not null, goto oldEntry, else to Second branchment
-            secondLabel:
-                Instruction to compute right part into target
-            oldEntry:
-                result = result & 1
-                Rest of the code
-            */
-            Register realTarget = target;
-            entry = graph.add(new Rmunop(new Msetnei(0), target, entry));
-            Label oldEntry = entry;
-            n.e2.accept(this);
-            target = realTarget;
-            Label secondLabel = entry;
-            Mubranch op = n.b == Binop.Band ? new Mjz() : new Mjnz();
-            entry = graph.add(new Rmubranch(op, target, oldEntry, secondLabel));
-            n.e1.accept(this);
-        } else {
-            Mbinop mbinop = null;
-            switch (ebinop.b) {
-                case Beq:
-                    mbinop = Mbinop.Msete;
-                    break;
-                case Bneq:
-                    mbinop = Mbinop.Msetne;
-                    break;
-                case Blt:
-                    mbinop = Mbinop.Msetl;
-                    break;
-                case Ble:
-                    mbinop = Mbinop.Msetle;
-                    break;
-                case Bgt:
-                    mbinop = Mbinop.Msetg;
-                    break;
-                case Bge:
-                    mbinop = Mbinop.Msetge;
-                    break;
-                case Badd:
-                    mbinop = Mbinop.Madd;
-                    break;
-                case Bsub:
-                    mbinop = Mbinop.Msub;
-                    break;
-                case Bmul:
-                    mbinop = Mbinop.Mmul;
-                    break;
-                case Bdiv:
-                    mbinop = Mbinop.Mdiv;
-                    break;
-            }
-            Register r1 = new Register();
-            Register r2 = target;
-            entry = graph.add(new Rmbinop(mbinop, r1, r2, entry));
-            target = r1;
-            ebinop.e2.accept(this);
-            target = r2;
-            ebinop.e1.accept(this);
-        }
+    if (band) {
+      Label lTrue = graph.add(new Rconst(0, currentRegister, nextLabel));
+      Label lFalse = graph.add(new Rconst(1, currentRegister, nextLabel));
+      Label le1IsTrue = graph.add(
+        new Rmubranch(new Mjz(), currentRegister, lTrue, lFalse)
+      );
+      nextLabel = le1IsTrue;
+      ebinop.e2.accept(this);
+      nextLabel =
+        graph.add(new Rmubranch(new Mjz(), currentRegister, lTrue, nextLabel));
+      ebinop.e1.accept(this);
+    } else if (bor) {
+      Label lTrue = graph.add(new Rconst(1, currentRegister, nextLabel));
+      Label lFalse = graph.add(new Rconst(0, currentRegister, nextLabel));
+      Label le1IsFalse = graph.add(
+        new Rmubranch(new Mjz(), currentRegister, lFalse, lTrue)
+      );
+      nextLabel = le1IsFalse;
+      ebinop.e2.accept(this);
+      nextLabel =
+        graph.add(new Rmubranch(new Mjz(), currentRegister, nextLabel, lTrue));
+      ebinop.e1.accept(this);
+    } else {
+      Register r1 = new Register();
+      Register r2 = currentRegister;
+      nextLabel = graph.add(new Rmbinop(mbinop, r1, r2, nextLabel));
+      currentRegister = r1;
+      ebinop.e2.accept(this);
+      currentRegister = r2;
+      ebinop.e1.accept(this);
+    }
+    //Beq, Bneq, Blt, Ble, Bgt, Bge, Badd, Bsub, Bmul, Bdiv, Band, Bor
+  }
+
+  public void visit(Eaccess_field n) {
+    Register r1 = new Register();
+    nextLabel =
+      graph.add(new Rload(r1, n.f.field_position, currentRegister, nextLabel));
+    currentRegister = r1;
+    n.e.accept(this);
+  }
+
+  public void visit(Eaccess_local n) {
+    // We try to access the variable from current local variables
+    Register r1 = varAsReg.get(n.i);
+    // If it is not a local variable then it is a argument
+    if (r1 == null) {
+      r1 = argAsReg.get(n.i);
+    }
+    nextLabel =
+      graph.add(new Rmbinop(Mbinop.Mmov, r1, currentRegister, nextLabel));
+  }
+
+  public void visit(Eassign_field n) {
+    Register r1 = new Register();
+    nextLabel = graph.add(
+        new Rstore(r1, currentRegister, n.f.field_position, nextLabel));
+    n.e1.accept(this);
+    currentRegister = r1;
+    n.e2.accept(this);
+  }
+
+  public void visit(Eassign_local n) {
+    // We try to get the register of the variable assigned
+    Register r1 = varAsReg.get(n.i);
+
+    // If it isn't a variable, it is a argument
+    if (r1 == null) {
+      r1 = argAsReg.get(n.i);
     }
 
-    @Override
-    public void visit(Ecall n) {
-        Register realTarget = target;
-        List<Register> args = new LinkedList<>();
+    nextLabel = graph.add(new Rmbinop(Mbinop.Mmov, currentRegister,r1, nextLabel));
+    n.e.accept(this);
+  }
 
-        entry = graph.add(new Rcall(realTarget, n.i, args, entry));
-
-        for (Expr e : n.el) {
-            target = new Register();
-            args.add(target);
-            e.accept(this);
-        }
+  public void visit(Ecall ecall) {
+    // We create all the registers that will be used for the arguments in the call
+    LinkedList<Register> rl = new LinkedList<Register>();
+    for (Expr expr : ecall.el) {
+      rl.add(new Register());
     }
 
-    @Override
-    public void visit(Esizeof n) {
-        RTL instr = new Rconst(n.s.size * 8, target, entry);
-        entry = graph.add(instr);
+    // We create the call instruction
+    nextLabel = graph.add(new Rcall(currentRegister, ecall.i, rl, nextLabel));
+
+    // We translate the arguments in RTL and by assigning their values to the corresponding registers in the previous call
+    for (int i = 0; i < rl.size(); i++) {
+      currentRegister = rl.get(i);
+      ecall.el.get(i).accept(this);
     }
+  }
 
-    @Override
-    public void visit(Sskip n) {
-        // THIS IS A NO-OP
-    }
+  public void visit(Esizeof n) {
+    nextLabel = graph.add(new Rconst(n.s.size, currentRegister, nextLabel));
+  }
 
-    @Override
-    public void visit(Sexpr n) {
-        // On n'a jamais besoin du résultat d'un Sexpr
-        target = null;
-        n.e.accept(this);
-    }
+  public void visit(Sexpr n) {
+    n.e.accept(this);
+  }
 
+ 	public void visit(Unop n) {
+	}
 
-    @Override
-    public void visit(Sif n) {
-        Label l = entry;
-        n.s2.accept(this);
-        Label lTrue = entry;
-        entry = l;
-        n.s1.accept(this);
-        Label lFalse = entry;
-        Register r1 = new Register();
-        entry = graph.add(new Rmubranch(new Mjnz(), r1, lTrue, lFalse));
-        target = r1;
-        n.e.accept(this);
-    }
+	public void visit(Binop n) {
+	}
 
-    @Override
-    public void visit(Swhile n) {
-        Label ld = entry;
-        Label lGoto = new Label();
-        entry = lGoto;
-        n.s.accept(this);
-        entry = graph.add(new Rmubranch(new Mjnz(), target, entry, ld));
-        n.e.accept(this);
-        graph.graph.put(lGoto, new Rgoto(entry));
-    }
+	public void visit(String n) {
+	}
 
-    @Override
-    public void visit(Sblock n) {
-        for (int i = 0; i < n.dl.size(); i++) {
-            n.dl.get(i).accept(this);
-        }
-        for (int i = n.sl.size() - 1; i >= 0; i--) {
-            n.sl.get(i).accept(this);
-        }
-    }
+	public void visit(Tint n) {
+	}
 
-    @Override
-    public void visit(Sreturn n) {
-        target = fun.result;
-        entry = fun.exit;
-        n.e.accept(this);
-    }
+	public void visit(Tstructp n) {
+	}
 
-    @Override
-    public void visit(Decl_fun n) {
+	public void visit(Tvoidstar n) {
+	}
 
-        // Allocate registers to function
-        fun = new RTLfun(n.fun_name);
-        fun.result = new Register();
-        fun.exit = new Label();
-        for (Decl_var arg : n.fun_formals)
-            fun.formals.add(arg.register);
+	public void visit(Ttypenull n) {
+	}
 
-        // Parse body
-        graph = new RTLgraph();
-        entry = fun.exit;
+	public void visit(Structure n) {
+	}
 
-        n.fun_body.accept(this);
+	public void visit(Field n) {
+	}
 
-        fun.body = graph;
-        fun.entry = entry;
-    }
+  public void visit(Decl_var var) {
+    Register r = new Register();
+    Rfun.locals.add(r);
+    varAsReg.put(var.name, r);
+  }
 
-    @Override
-    public void visit(File n) {
-        file = new RTLfile();
+  public void visit(Expr n) {
+    n.accept(this);
+	}
 
-        for (Decl_fun f : n.funs) {
-            f.accept(this);
-            file.funs.add(fun);
-        }
-    }
+	public void visit(Sskip n) {
+	}
 
-    RTLfile translate(File n) {
-        n.accept(this);
-        return file;
-    }
+  public void visit(Sif n) {
+      // We create the instructions for computation of s1 and s2 and store the labels in lTrue and lFalse
+    Label l = nextLabel;
+    n.s2.accept(this);
+    Label lTrue = nextLabel;
+    nextLabel = l;
+    n.s1.accept(this);
+    Label lFalse = nextLabel;
+    
+    Register r1 = new Register();
+    nextLabel = graph.add(new Rmubranch(new Mjnz(), r1, lTrue, lFalse));
+    currentRegister = r1;
+    n.e.accept(this);
+	}
+
+  public void visit(Swhile n) {
+    Label ld = nextLabel;
+
+    Label lGoto = new Label();
+    nextLabel = lGoto;
+    n.s.accept(this);
+
+    nextLabel = graph.add(new Rmubranch(new Mjnz(), currentRegister, nextLabel, ld));
+
+    n.e.accept(this);
+    
+    graph.graph.put(lGoto, new Rgoto(nextLabel));
+
+	}
 }

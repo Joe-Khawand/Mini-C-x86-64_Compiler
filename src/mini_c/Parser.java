@@ -777,6 +777,7 @@ class CUP$Parser$actions {
 		int e1left = ((java_cup.runtime.Symbol)CUP$Parser$stack.peek()).left;
 		int e1right = ((java_cup.runtime.Symbol)CUP$Parser$stack.peek()).right;
 		Pexpr e1 = (Pexpr)((java_cup.runtime.Symbol) CUP$Parser$stack.peek()).value;
+
 		 RESULT = new Punop(Unop.Uneg, e1, new Loc(opleft, opright)); 
               CUP$Parser$result = parser.getSymbolFactory().newSymbol("expr",15, ((java_cup.runtime.Symbol)CUP$Parser$stack.elementAt(CUP$Parser$top-1)), ((java_cup.runtime.Symbol)CUP$Parser$stack.peek()), RESULT);
             }

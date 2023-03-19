@@ -12,30 +12,32 @@ enum Unop {
 
 // une classe pour les localisations
 class Loc {
-  final int line, column;
-  
-  Loc(int line, int column) {
-    this.line = line;
-    this.column = column;
-  }
+	final int line, column;
 
-  @Override
-  public String toString() {
-    return "line " + line + ", column " + column;
-  }
+	Loc(int line, int column) {
+		this.line = line;
+		this.column = column;
+	}
+
+	@Override
+	public String toString() {
+		return "line " + line + ", column " + column;
+	}
 }
 
 class Pstring {
-  String id;
-  Loc loc;
-  public Pstring(String id, Loc loc) {
-    this.id = id;
-    this.loc = loc;
-  }
-  @Override
-  public String toString() {
-    return this.id;
-  }
+	String id;
+	Loc loc;
+
+	public Pstring(String id, Loc loc) {
+		this.id = id;
+		this.loc = loc;
+	}
+
+	@Override
+	public String toString() {
+		return this.id;
+	}
 }
 
 class Pfile {
@@ -45,9 +47,10 @@ class Pfile {
 		super();
 		this.l = l;
 	}
+
 	void accept(Pvisitor v) {
 		v.visit(this);
-	}	
+	}
 }
 
 abstract class Pdecl {
@@ -63,9 +66,10 @@ class Pstruct extends Pdecl {
 		this.s = s;
 		this.fl = fl;
 	}
+
 	void accept(Pvisitor v) {
 		v.visit(this);
-	}	
+	}
 }
 
 class Pfun extends Pdecl {
@@ -83,9 +87,10 @@ class Pfun extends Pdecl {
 		this.pl = pl;
 		this.b = b;
 	}
+
 	void accept(Pvisitor v) {
 		v.visit(this);
-	}	
+	}
 }
 
 class Pdeclvar {
@@ -99,19 +104,24 @@ class Pdeclvar {
 		this.id = id.id;
 		this.loc = id.loc;
 	}
+
+	Decl_var accept(Pvisitor v) {
+		return v.visit(this);
+	}
 }
 
 /* types */
 
 abstract class Ptype {
 	static Ptype ptint = new PTint();
-	abstract void accept(Pvisitor v);
+
+	abstract Typ accept(Pvisitor v);
 }
 
 class PTint extends Ptype {
-	void accept(Pvisitor v) {
-		v.visit(this);
-	}	
+	Typ accept(Pvisitor v) {
+		return v.visit(this);
+	}
 }
 
 class PTstruct extends Ptype {
@@ -123,21 +133,28 @@ class PTstruct extends Ptype {
 		this.id = id.id;
 		this.loc = id.loc;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Typ accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
 
 /* expressions */
 
 abstract class Pexpr {
-  Loc loc;
-  Pexpr(Loc loc) { this.loc = loc; }
-  abstract void accept(Pvisitor v);
+	Loc loc;
+
+	Pexpr(Loc loc) {
+		this.loc = loc;
+	}
+
+	abstract Expr accept(Pvisitor v);
 }
 
-abstract class Plvalue extends Pexpr{
-  Plvalue(Loc loc) { super(loc); }
+abstract class Plvalue extends Pexpr {
+	Plvalue(Loc loc) {
+		super(loc);
+	}
 }
 
 class Pident extends Plvalue {
@@ -147,9 +164,10 @@ class Pident extends Plvalue {
 		super(id.loc);
 		this.id = id.id;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
-	}	
+
+	Eaccess_local accept(Pvisitor v) {
+		return v.visit(this);
+	}
 }
 
 class Pint extends Pexpr {
@@ -159,8 +177,9 @@ class Pint extends Pexpr {
 		super(loc);
 		this.n = n;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Econst accept(Pvisitor v) {
+		return v.visit(this);
 	}
 
 }
@@ -168,28 +187,31 @@ class Pint extends Pexpr {
 class Parrow extends Plvalue {
 	Pexpr e;
 	String f;
+
 	public Parrow(Pexpr e, String f) {
 		super(e.loc);
 		this.e = e;
 		this.f = f;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Eaccess_field accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
 
 class Passign extends Pexpr {
-  Plvalue e1;
-  Pexpr e2;
+	Plvalue e1;
+	Pexpr e2;
 
-  public Passign(Plvalue e1, Pexpr e2) {
-    super(e1.loc);
-    this.e1 = e1;
-    this.e2 = e2;
-  }
-  void accept(Pvisitor v) {
-    v.visit(this);
-  }
+	public Passign(Plvalue e1, Pexpr e2) {
+		super(e1.loc);
+		this.e1 = e1;
+		this.e2 = e2;
+	}
+
+	Expr accept(Pvisitor v) {
+		return v.visit(this);
+	}
 }
 
 class Pbinop extends Pexpr {
@@ -202,8 +224,9 @@ class Pbinop extends Pexpr {
 		this.e1 = e1;
 		this.e2 = e2;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Ebinop accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
 
@@ -216,11 +239,11 @@ class Punop extends Pexpr {
 		this.op = op;
 		this.e1 = e1;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Eunop accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
-
 
 class Pcall extends Pexpr {
 	final String f;
@@ -231,8 +254,9 @@ class Pcall extends Pexpr {
 		this.f = f.id;
 		this.l = l;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Ecall accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
 
@@ -243,18 +267,22 @@ class Psizeof extends Pexpr {
 		super(loc);
 		this.id = id;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
-	}
 
+	Esizeof accept(Pvisitor v) {
+		return v.visit(this);
+	}
 }
 
 /* instructions */
 
 abstract class Pstmt {
-  Loc loc;
-  Pstmt(Loc loc) { this.loc = loc; }
-	abstract void accept(Pvisitor v);
+	Loc loc;
+
+	Pstmt(Loc loc) {
+		this.loc = loc;
+	}
+
+	abstract Stmt accept(Pvisitor v);
 
 }
 
@@ -267,16 +295,20 @@ class Pbloc extends Pstmt {
 		this.vl = vl;
 		this.sl = sl;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Sblock accept(Pvisitor v) {
+		return v.visit(this);
 	}
 
 }
 
 class Pskip extends Pstmt {
-  Pskip(Loc loc) { super(loc); }
-	void accept(Pvisitor v) {
-		v.visit(this);
+	Pskip(Loc loc) {
+		super(loc);
+	}
+
+	Sskip accept(Pvisitor v) {
+		return v.visit(this);
 	}
 
 }
@@ -289,8 +321,8 @@ class Preturn extends Pstmt {
 		this.e = e;
 	}
 
-	void accept(Pvisitor v) {
-		v.visit(this);
+	Sreturn accept(Pvisitor v) {
+		return v.visit(this);
 	}
 
 }
@@ -305,8 +337,9 @@ class Pif extends Pstmt {
 		this.s1 = s1;
 		this.s2 = s2;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Sif accept(Pvisitor v) {
+		return v.visit(this);
 	}
 
 }
@@ -318,8 +351,9 @@ class Peval extends Pstmt {
 		super(e.loc);
 		this.e = e;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Stmt accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
 
@@ -332,48 +366,51 @@ class Pwhile extends Pstmt {
 		this.e = e;
 		this.s1 = s1;
 	}
-	void accept(Pvisitor v) {
-		v.visit(this);
+
+	Swhile accept(Pvisitor v) {
+		return v.visit(this);
 	}
 }
 
 interface Pvisitor {
 
-	public void visit(PTint n);
-	
-	public void visit(PTstruct n);
-	
-	public void visit(Pint n);
+	public Typ visit(PTint n);
 
-	public void visit(Pident n);
+	public Typ visit(PTstruct n);
 
-	public void visit(Punop n);
-  
-	public void visit(Passign n);
+	public Econst visit(Pint n);
 
-	public void visit(Pbinop n);
+	public Eaccess_local visit(Pident n);
 
-	public void visit(Parrow n);
+	public Eunop visit(Punop n);
 
-	public void visit(Pcall n);
+	public Expr visit(Passign n);
 
-	public void visit(Psizeof n);
+	public Ebinop visit(Pbinop n);
 
-	public void visit(Pskip n);
+	public Eaccess_field visit(Parrow n);
 
-	public void visit(Peval n);
+	public Ecall visit(Pcall n);
 
-	public void visit(Pif n);
+	public Esizeof visit(Psizeof n);
 
-	public void visit(Pwhile n);
+	public Sskip visit(Pskip n);
 
-	public void visit(Pbloc n);
+	public Stmt visit(Peval n);
 
-	public void visit(Preturn n);
+	public Sif visit(Pif n);
 
-	public void visit(Pstruct n);
+	public Swhile visit(Pwhile n);
+
+	public Sblock visit(Pbloc n);
+
+	public Sreturn visit(Preturn n);
+
+	public Structure visit(Pstruct n);
 
 	public void visit(Pfun n);
 
 	public void visit(Pfile n);
+
+	public Decl_var visit(Pdeclvar n);
 }

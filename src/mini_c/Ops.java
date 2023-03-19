@@ -14,6 +14,7 @@ class Msetei extends Munop { // égalité avec une constante (equal immediate)
 	Msetei(int n) { this.n = n;}
 	public String toString() { return "sete $" + n; } 
 }
+
 class Msetnei extends Munop { // différence avec une constante (not equal immediate)
 	int n;
 	Msetnei(int n) { this.n = n;}

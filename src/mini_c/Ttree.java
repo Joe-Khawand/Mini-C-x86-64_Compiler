@@ -17,6 +17,13 @@ class Tint extends Typ {
 	public String toString() {
 	  return "int";
 	}
+	@Override
+    public boolean equals(Object o) {
+        if (o instanceof Tint || o instanceof Ttypenull) {
+            return true;
+        }
+        return super.equals(o);
+    }
 }
 
 class Tstructp extends Typ {
@@ -33,6 +40,13 @@ class Tstructp extends Typ {
 	public String toString() {
 	  return "struct " + s.str_name + "*";
 	}
+	@Override
+    public boolean equals(Object o) {
+        if (o instanceof Tstructp || o instanceof Tvoidstar || o instanceof Ttypenull) {
+            return true;
+        }
+        return super.equals(o);
+    }
 }
 
 class Tvoidstar extends Typ {
@@ -46,6 +60,13 @@ class Tvoidstar extends Typ {
 	public String toString() {
 	  return "void*";
 	}
+	@Override
+    public boolean equals(Object o) {
+        if (o instanceof Tvoidstar || o instanceof Tstructp) {
+            return true;
+        }
+        return super.equals(o);
+    }
 }
 
 class Ttypenull extends Typ {
@@ -59,6 +80,13 @@ class Ttypenull extends Typ {
 	public String toString() {
 	  return "typenull";
 	}
+	@Override
+    public boolean equals(Object o) {
+        if (o instanceof Tstructp || o instanceof Tint || o instanceof Ttypenull) {
+            return true;
+        }
+        return super.equals(o);
+    }
 }
 
 class Structure {

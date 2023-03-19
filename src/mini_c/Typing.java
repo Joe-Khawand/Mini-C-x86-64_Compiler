@@ -2,17 +2,13 @@ package mini_c;
 
 public class Typing implements Pvisitor {
 
-	private String filename;
-    private Typ typ = new Ttypenull(); // any Expr is decorated with a type
-    private Typ return_typ; // for statements
-	private Stmt stmt;
-    private Expr expr;
+    static class Env extends HashMap<String, Decl_var> {}
 	private LinkedList<HashMap<String, Pdeclvar>> vars;
-    private LinkedList<Decl_fun> l_decl_fun = new LinkedList<>();
     private HashMap<String, Decl_fun> funs = new HashMap<>();
-    private HashMap<String, Decl_fun> fun_prototypes = new HashMap<>();
     private HashMap<String, Structure> structs = new HashMap<>();
-    private boolean returnSeen = false;
+    private String filename;
+    Typ returnTyp = null;
+
 
 	// le résultat du typage sera mis dans cette variable
 	private File file;
@@ -23,36 +19,50 @@ public class Typing implements Pvisitor {
 		return file;
 	}
 	
+    public Typing(String filename) {
+        this.filename = filename;
+
+        Decl_var putcharArg = new Decl_var(new Tint(), "c");
+        Decl_fun putchar = new Decl_fun(new Tint(), "putchar", new LinkedList<>(Collections.singletonList(putcharArg)), new Sskip());
+        funs.put(putchar.fun_name, putchar);
+
+        Decl_var sbrkArg = new Decl_var(new Tint(), "n");
+        Decl_fun sbrk = new Decl_fun(new Tvoidstar(), "sbrk", new LinkedList<>(Collections.singletonList(sbrkArg)), new Sskip());
+        funs.put(sbrk.fun_name, sbrk);
+    }
+
+
 	// il faut compléter le visiteur ci-dessous pour réaliser le typage
 	
 	/* types */
-	@Override
+	th@Override
 	public void visit(Pfile n) {
 		// TODO Auto-generated method stub
-		this.filename = n.name;
-
-	// putchar
-	this.fun_prototypes.put("putchar", new Decl_fun(new Tint(), "putchar", lputchar, null));
-	for (Pdecl d: n.l) {
-		d.accept(this);
-	}
-	this.file = new File(this.l_decl_fun);
-	this.file.name = n.name;
-
-	//*malloc
-
+		boolean mainIsPresent = false;
+        file = new File(new LinkedList<>());
+        for (Pdecl d : n.l) {
+            d.accept(this);
+            if (d.decl_fun != null && "main".equals(d.decl_fun.fun_name))
+                mainIsPresent = true;
+        }
+        if (!mainIsPresent)
+            throw FunctionTypeError.undefinedFunction("main", new Loc(0, 0), filename);
+        file.funs = new LinkedList<>(funs.values());
 	}
 
 	@Override
 	public void visit(PTint n) {
 		// TODO Auto-generated method stub
-		this.typ = new Tint();
+		n.typ = new Tint();
 	}
 
 	@Override
 	public void visit(PTstruct n) {
 		// TODO Auto-generated method stub
-		this.typ = new Tstructp(this.structs.get(n.id));
+		if (!structs.containsKey(n.id))
+            throw StructureTypeError.undefinedStructure(n.id, n.loc, filename);
+        n.typ = new Tstructp(structs.get(n.id));
+
 	}
 
 	/* expressions */
@@ -71,280 +81,259 @@ public class Typing implements Pvisitor {
 	@Override
 	public void visit(Pident n) {
 		// TODO Auto-generated method stub
-		int index = -1;
-        for (int i = this.vars.size()-1; i >= 0; i--) {
-        	if (this.vars.get(i).containsKey(n.id)) {	
-                index = i;
+		Iterator<Env> it = vars.descendingIterator();
+        Env env;
+        Decl_var v = null;
+        while (it.hasNext()) {
+            env = it.next();
+            if (env.containsKey(n.id)) {
+                v = env.get(n.id);
                 break;
-        	}
-        }       	
-        if (index < 0)
-        	this.reportError(n.loc, "unknown variable: " + n.id);
-        
-        vars.get(index).get(n.id).typ.accept(this);
-        this.expr = new Eaccess_local(n.id);
-        this.expr.typ = this.typ;
+            }
+        }
+        if (v == null)
+            throw IdentTypeError.variableNotFound(n.id, n.loc, filename);
+        n.expr = new Eaccess_local(v);
+        n.expr.typ = v.t;
 	}
 
 	@Override
 	public void visit(Punop n) {
 		// TODO Auto-generated method stub
 		n.e1.accept(this);
-        if (n.op == Unop.Uneg && !this.expr.typ.equals(new Tint())) {
-            this.reportError(n.loc, 
-                "unsupported operation: " + "!" + this.expr.typ);
+        if (n.op == Unop.Uneg && !n.e1.expr.typ.equals(new Tint())) {
+            throw new UnopTypeError(n.op, n.e1.expr.typ, new Tint(), n.loc, filename);
         }
-        this.expr = new Eunop(n.op, this.expr);
-        this.expr.typ = new Tint();
+        n.expr = new Eunop(n.op, n.e1.expr);
+        n.expr.typ = new Tint();
 	}
 
 	@Override
 	public void visit(Passign n) {
 		// TODO Auto-generated method stub
 		n.e1.accept(this);
-        Expr e1 = this.expr;
+        Expr e1 = n.e1.expr;
         n.e2.accept(this);
-        Expr e2 = this.expr;
+        Expr e2 = n.e2.expr;
+        if (e1 == null || e1.typ == null)
+            throw new TypingNotDone(n.e1.loc, filename);
+        if (e2 == null || e2.typ == null)
+            throw new TypingNotDone(n.e2.loc, filename);
         if (!e1.typ.equals(e2.typ)) {
-            this.reportError(n.loc, 
-                "unsupported operation: " + e1.typ + " = " + e2.typ);
+            throw AffectationError.incorrectTypes(e1.typ, e2.typ, n.loc, filename);
         }
-
-        if (e1 instanceof Eaccess_local) {
-            Eaccess_local e = (Eaccess_local) e1;
-            this.expr = new Eassign_local(e.i, e2);
+        if (e1 instanceof Eaccess_local && n.e1 instanceof Pident)
+            n.expr = new Eassign_local(((Eaccess_local) e1).v, e2);
+        else {
+            assert e1 instanceof Eaccess_field;
+            Eaccess_field lvalue = (Eaccess_field) e1;
+            n.expr = new Eassign_field(lvalue.e, lvalue.f, e2);
         }
-        if (e1 instanceof Eaccess_field) {
-            Eaccess_field e = (Eaccess_field) e1;
-            this.expr = new Eassign_field(e.e, e.f, e2);
-        }
-        this.expr.typ = e1.typ;
+        n.expr.typ = e1.typ;
 	}
 
 	@Override
 	public void visit(Pbinop n) {
 		// TODO Auto-generated method stub
 		n.e1.accept(this);
-        Expr e1 = this.expr;
+        Expr e1 = n.e1.expr;
         n.e2.accept(this);
-        Expr e2 = this.expr;
-        String s_op = " ";
-        int c = -1;
+        Expr e2 = n.e2.expr;
+        if (e1 == null || e2 == null)
+            throw new TypingNotDone(n.loc, filename);
         switch (n.op) {
-		case Beq:  s_op = " == "; c = 0; break;
-        case Bneq: s_op = " != "; c = 0; break;
-        case Blt:  s_op = " < " ; c = 0; break;
-        case Ble:  s_op = " <= "; c = 0; break;
-        case Bgt:  s_op = " > " ; c = 0; break;
-        case Bge:  s_op = " >= "; c = 0; break;
-        case Badd: s_op = " + " ; c = 1; break;
-        case Bsub: s_op = " - " ; c = 1; break;
-        case Bmul: s_op = " * " ; c = 1; break;
-        case Bdiv: s_op = " / " ; c = 1; break;
-        case Band: s_op = " && " ; c = 1; break;
-        case Bor: s_op = " || " ; c = 1; break;
-        default:                         break;
+		case Beq:  
+        case Bneq: 
+        case Blt:  
+        case Ble:  
+        case Bgt:  
+        case Bge:
+            if (!e1.typ.equals(e2.typ))
+                throw BinopTypeError.sameTypeRequired(n.op, e1.typ, e2.typ, n.loc, filename);
+            break;
+        case Badd: 
+        case Bsub: 
+        case Bmul: 
+        case Bdiv:
+            if (!(new Tint()).equals(e1.typ))
+                throw new BinopTypeError(n.op, new Tint(), e1.typ, n.loc, filename);
+            if (!(new Tint()).equals(e2.typ))
+                throw new BinopTypeError(n.op, new Tint(), e2.typ, n.loc, filename);
+            break; 
+        case Band: 
+        case Bor: 
+        default:                         
+            break;
         }
-        Typ t_int = new Tint();
-        if ((c == 0 && !e1.typ.equals(e2.typ)) || 
-            (c == 1 && !(e1.typ.equals(t_int) && e2.typ.equals(t_int)))) 
-        {    
-            this.reportError(n.loc, 
-                "unsupported operation: " + e1.typ + s_op + e2.typ);
-        }
-        this.expr = new Ebinop(n.op, e1, e2);
-        this.expr.typ = t_int;
+        n.expr = new Ebinop(n.op, e1, e2);
+        n.expr.typ = new Tint();
 	}
 
 	@Override
 	public void visit(Parrow n) {
-		// TODO Auto-generated method stub{
+		// TODO Auto-generated method stub
         n.e.accept(this);
-        Expr e = this.expr;
-        if (!e.typ.equals(new Tvoidstar())) {
-            this.reportError(n.loc, 
-                "unsupported operation: " + e.typ + " -> " + n.f);
-        }
-        Structure s = ((Tstructp) e.typ).s;
-        if (!s.fields.containsKey(n.f)) {
-            this.reportError(n.loc, s + " doesn't contain field " + n.f);
-        }
+        if (n.e.exp == null || n.e.exp.typ == null)
+            throw new TypingNotDone(n.e.loc, filename);
+        if (!(n.e.exp.typ instanceof Tstructp))
+            throw AccessError.badExpression(n.e.exp.typ, n.loc, filename);
+        Tstructp s = (Tstructp) n.e.exp.typ;
+        if (!s.s.fields.containsKey(n.f))
+            throw AccessError.noSuchField(s.s, n.f, n.loc, filename);
         Field f = s.fields.get(n.f);
-        this.expr = new Eaccess_field(e, f);
-        this.expr.typ = f.typ;
+        n.expr = new Eaccess_field(e, f);
+        n.expr.typ = f.typ;
 	}
 
 	@Override
 	public void visit(Pcall n) {
 		// TODO Auto-generated method stub
-		if (!this.fun_prototypes.containsKey(n.f)) {
-        	this.reportError(n.loc, "function " + 
-                n.f + " not declared");
-        }
-        Decl_fun df = this.fun_prototypes.get(n.f);
-        if (n.l.size() != df.fun_formals.size()) {
-            this.reportError(n.loc, 
-                "wrong number of arguments: " + n.l.size() + " given, " +
-                df.fun_formals.size() + " expected");
-		}
-        LinkedList<Expr> l_exprs = new LinkedList<>();
-        for (int i = 0; i < n.l.size(); i++) {
-            n.l.get(i).accept(this);
-            Expr e = this.expr;
-            l_exprs.add(e);
-            Typ t1 = e.typ;
-            Typ t2 = df.fun_formals.get(i).t;
-            
-            if (!t1.equals(t2)) {
-                this.reportError(n.loc, 
-                    "argument " + (i+1) + ": " + 
-                    t1 + " given, " + t2 + " expected");
+		if (!funs.containsKey(n.f))
+            throw FunctionTypeError.undefinedFunction(n.f, n.loc, filename);
+        Decl_fun f = funs.get(n.f);
+        LinkedList<Expr> args = new LinkedList<>();
+        if (f.fun_formals.size() != n.l.size())
+            throw FunctionTypeError.wrongArgumentNumber(n.f, f.fun_formals.size(), n.l.size(), n.loc, filename);
+        for (int i = 0; i < f.fun_formals.size(); i++) {
+            Pexpr a = n.l.get(i);
+            a.accept(this);
+
+            if (f.fun_formals.get(i).t.equals(a.expr.typ))
+                args.addLast(a.expr);
+            else {
+                System.out.println(f.toString());
+                throw FunctionTypeError.badArgumentType(n.f, i, f.fun_formals.get(i).t, a.expr.typ, a.loc, filename);
             }
         }
-        this.expr = new Ecall(n.f, l_exprs);
-        this.expr.typ = df.fun_typ;
-        this.typ = df.fun_typ;
+        n.expr = new Ecall(n.f, args);
+        n.expr.typ = f.fun_typ;
 	}
 
 	@Override
 	public void visit(Psizeof n) {
 		// TODO Auto-generated method stub
-		if (!this.structs.containsKey(n.id)) {
-            this.reportError(n.loc, n.id + " undeclared");
-        }
-        this.expr = new Esizeof(this.structs.get(n.id));
-        this.expr.typ = new Tint();
+		if (!structs.containsKey(n.id))
+            throw StructureTypeError.undefinedStructure(n.id, n.loc, filename);
+        n.expr = new Esizeof(structs.get(n.id));
+        n.expr.typ = new Tint();
+
 	}
 
 	/* instructions */
 	@Override
 	public void visit(Pskip n) {
 		// TODO Auto-generated method stub
-		this.stmt = new Sskip();
+		n.stmt = new Sskip();
+        n.stmt.terminating = false;
 	}
 
 	@Override
 	public void visit(Peval n) {
 		// TODO Auto-generated method stub
 		n.e.accept(this);
-        this.stmt = new Sexpr(this.expr);
+        n.stmt = new Sexpr(n.e.expr);
+        n.stmt.terminating = false;
 	}
 
 	@Override
 	public void visit(Pif n) {
 		// TODO Auto-generated method stub
 		n.e.accept(this);
-        Expr e = this.expr;
         n.s1.accept(this);
-        Stmt s1 = this.stmt;
         n.s2.accept(this);
-        Stmt s2 = this.stmt;
-        this.stmt = new Sif(e, s1, s2);
+        n.stmt = new Sif(n.e.expr, n.s1.stmt, n.s2.stmt);
+        n.stmt.terminating = n.s1.stmt.terminating && n.s2.stmt.terminating;
 	}
 
 	@Override
 	public void visit(Pwhile n) {
 		// TODO Auto-generated method stub
 		n.e.accept(this);
-        Expr e = this.expr;
         n.s1.accept(this);
-        Stmt s1 = this.stmt;
-        this.stmt = new Swhile(e, s1);
+        n.stmt = new Swhile(n.e.expr, n.s1.stmt);
+        n.stmt.terminating = false;
 	}
 
 	@Override
 	public void visit(Pbloc n) {
 		// TODO Auto-generated method stub
-		LinkedList<Decl_var> d_vars = new LinkedList<>();
-        LinkedList<Stmt> l_stmt = new LinkedList<>();
-        this.vars.addLast(new HashMap<String, Pdeclvar>());
-        for (Pdeclvar dv: n.vl) {
-        	if (this.vars.get(this.vars.size()-1).containsKey(dv.id)) {
-                this.reportError(dv.loc, "redefinition of variable: " + dv.id);
-        	}
-        	
-        	dv.typ.accept(this);
-	        this.vars.get(this.vars.size()-1).put(dv.id, dv);
-	        d_vars.add(new Decl_var(this.typ, dv.id));
-		}
-		for (Pstmt s: n.sl) {
-            s.accept(this);
-            l_stmt.add(this.stmt);
+		Env locals = new Env();
+        for (Pdeclvar dvar : pbloc.vl) {
+            dvar.typ.accept(this);
+            if (locals.containsKey(dvar.id))
+                throw new RedefinitionError("variable", dvar.id, dvar.loc, filename);
+            locals.put(dvar.id, new Decl_var(dvar.typ.typ, dvar.id));
         }
-        this.stmt = new Sblock(d_vars, l_stmt);
-        this.vars.removeLast();
+        LinkedList<Stmt> instructions = new LinkedList<>();
+        boolean terminating = false;
+        vars.addLast(locals);
+        for (Pstmt s : pbloc.sl) {
+            s.accept(this);
+            instructions.add(s.stmt);
+            terminating = terminating || s.stmt.terminating;
+        }
+        vars.removeLast();
+        pbloc.stmt = new Sblock(new LinkedList<>(locals.values()), instructions);
+        pbloc.stmt.terminating = terminating;
 	}
 
 	@Override
 	public void visit(Preturn n) {
 		// TODO Auto-generated method stub
 		n.e.accept(this);
-        this.returnSeen = true;
-        this.stmt = new Sreturn(this.expr);
-        if (!this.return_typ.equals(this.expr.typ)) {
-            this.reportError(n.loc, "wrong return type: " +
-                this.expr.typ + " given, " + 
-                this.return_typ + " expected");
-        }
+        if (!n.e.expr.typ.equals(returnTyp))
+            throw new ReturnTypeError(returnTyp, n.e.expr.typ, n.loc, filename);
+        n.stmt = new Sreturn(n.e.expr);
+        n.stmt.terminating = true;
 	}
 
 	/* others */
 	@Override
 	public void visit(Pstruct n) {
 		// TODO Auto-generated method stub
-		if (this.structs.containsKey(n.s)) {
-            this.reportError(new Loc(-1,-1), 
-                "redefinition of struct: " + n.s);
-        }
+		if (structs.containsKey(n.s))
+            throw new RedefinitionError("structure", n.s, new Loc(0, 0), filename);
         Structure s = new Structure(n.s);
-        this.structs.put(n.s, s);
-        int offset = 0;
-        for (Pdeclvar dv: n.fl) {
-            if (s.fields.containsKey(dv.id)) {
-                this.reportError(new Loc(-1,-1), 
-                    "redefinition of field " + dv.id + 
-                    " inside struct " + n.s);
-            }
-            dv.typ.accept(this);
-            s.fields.put(dv.id, new Field(dv.id, this.typ, offset));
-            offset += 8;
+        structs.put(n.s, s);
+        HashMap<String, Field> fields = new HashMap<>();
+        for (Pdeclvar dvar : n.fl) {
+            dvar.typ.accept(this);
+            if (fields.containsKey(dvar.id))
+                throw new RedefinitionError("field", dvar.id, dvar.loc, filename);
+            Field field = new Field(dvar.id, dvar.typ.typ);
+            field.pos = fields.size();
+            fields.put(dvar.id, field);
         }
-        s.size = offset;
+        s.fields = fields;
+        s.size = s.fields.size();
 	}
 
 	@Override
 	public void visit(Pfun n) {
 		// TODO Auto-generated method stub
-		n.ty.accept(this);
-		this.return_typ = this.typ;
-        String fun_name = n.s;
-        if (this.fun_prototypes.containsKey(fun_name)) {
-            this.reportError(new Loc(-1,-1), 
-                "redefinition of function: " + fun_name);
+		if (funs.containsKey(pfun.s))
+            throw new RedefinitionError("function", pfun.s, pfun.loc, filename);
+        pfun.ty.accept(this);
+        Env arguments = new Env();
+        LinkedList<Decl_var> args = new LinkedList<>();
+        for (Pdeclvar dvar : pfun.pl) {
+            dvar.typ.accept(this);
+            if (arguments.containsKey(dvar.id))
+                throw new RedefinitionError("argument", dvar.id, dvar.loc, filename);
+            Decl_var arg = new Decl_var(dvar.typ.typ, dvar.id);
+            arguments.put(dvar.id, arg);
+            args.addLast(arg);
         }
-        LinkedList<Decl_var> fun_formals = new LinkedList<>();
-        Decl_fun d_fun = new Decl_fun(
-            this.return_typ, fun_name, fun_formals, null);
-        fun_prototypes.put(fun_name, d_fun);
-        this.l_decl_fun.add(d_fun);
-        this.vars = new LinkedList<>();
-        this.vars.addLast(new HashMap<String, Pdeclvar>());
-        for (Pdeclvar dv: n.pl) {
-        	if (this.vars.get(this.vars.size()-1).containsKey(dv.id)) {
-                this.reportError(new Loc(-1,-1), 
-                    "redefinition of variable " + dv.id + 
-                    " inside function " + fun_name);
-            }
-            dv.typ.accept(this);
-        	fun_formals.add(new Decl_var(this.typ, dv.id));
-        	this.vars.get(this.vars.size()-1).put(dv.id, dv);
-        }   
-        n.b.accept(this);
-        if (!this.returnSeen) 
-            System.out.println("In function " + fun_name + 
-                ": Non-void function should return " + n.ty);
-		d_fun.fun_body = this.stmt;
-		this.funs.put(fun_name, d_fun);
+        pfun.decl_fun = new Decl_fun(pfun.ty.typ, pfun.s, args, null);
+        funs.put(pfun.s, pfun.decl_fun);
+        returnTyp = pfun.ty.typ;
+        vars.addLast(arguments);
+        pfun.b.accept(this);
+        vars.removeLast();
+        if (!pfun.b.stmt.terminating) {
+            System.err.println(String.format("WARNING: Reached end of function %s at %s without finding a return statement", pfun.s, pfun.loc));
+        }
+        pfun.decl_fun.fun_body = pfun.b.stmt;
 	}
 
 }

@@ -6,7 +6,7 @@ import java.util.List;
 /** registre (physique ou pseudo-registres) */
 public class Register {
 
-	private static int next = 0;
+	public int next = 0;
 	
 	final String name;
 	

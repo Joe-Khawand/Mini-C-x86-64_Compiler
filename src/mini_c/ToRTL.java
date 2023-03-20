@@ -3,6 +3,7 @@ package mini_c;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.HashMap;
 
 public class ToRTL implements Visitor {
     RTLfun fun;
@@ -10,6 +11,7 @@ public class ToRTL implements Visitor {
     RTLgraph graph;
     Label entry;
     Register currentRegister;
+    HashMap<String,Register> vars = new HashMap<>();
 
     @Override
     public void visit(Unop n) {
@@ -58,7 +60,7 @@ public class ToRTL implements Visitor {
 
     @Override
     public void visit(Decl_var n) {
-
+        vars.put(n.name,currentRegister);
     }
 
     @Override
@@ -74,15 +76,11 @@ public class ToRTL implements Visitor {
 
     @Override
     public void visit(Eaccess_local n) {
-        entry = graph.add(new Rmbinop(Mbinop.Mmov, n.v.register, currentRegister, entry));
+        entry = graph.add(new Rmbinop(Mbinop.Mmov, vars.get(n.i), currentRegister, entry));
     }
 
     @Override
     public void visit(Eaccess_field n) {
-        /* currentRegister code:
-        r1 = variable at n.name
-        mov i(r1) currentRegister
-         */
         Register realcurrentRegister = currentRegister;
         currentRegister = new Register();
         entry = graph.add(new Rload(currentRegister, n.f.field_position * 8, realcurrentRegister, entry));
@@ -93,23 +91,15 @@ public class ToRTL implements Visitor {
     public void visit(Eassign_local n) {
         // On ne garde pas le résultat si on en a pas besoin
         if (currentRegister != null)
-            entry = graph.add(new Rmbinop(Mbinop.Mmov, n.v.register, currentRegister, entry));
-        currentRegister = n.v.register;
+            entry = graph.add(new Rmbinop(Mbinop.Mmov, vars.get(n.i), currentRegister, entry));
+        currentRegister = vars.get(n.i);
         n.e.accept(this);
     }
 
     @Override
     public void visit(Eassign_field n) {
-        /* currentRegister code:
-        r1 = variable at n.name
-        currentRegister = visit(n.e)
-        mov currentRegister i(r1)
-         */
-
-        // Ici, même si on n'a pas besoin du résultat, on est obligé de le stocker dans un pseudo-registre
         if (currentRegister == null)
             currentRegister = new Register();
-
         Register realcurrentRegister = currentRegister;
         Register variable = new Register();
         entry = graph.add(new Rstore(realcurrentRegister, variable, n.f.field_position * 8, entry));
@@ -219,7 +209,6 @@ public class ToRTL implements Visitor {
 
     @Override
     public void visit(Sexpr n) {
-        // On n'a jamais besoin du résultat d'un Sexpr
         currentRegister = null;
         n.e.accept(this);
     }
@@ -269,20 +258,14 @@ public class ToRTL implements Visitor {
 
     @Override
     public void visit(Decl_fun n) {
-
-        // Allocate registers to function
         fun = new RTLfun(n.fun_name);
         fun.result = new Register();
         fun.exit = new Label();
         for (Decl_var arg : n.fun_formals)
             fun.formals.add(arg.register);
-
-        // Parse body
         graph = new RTLgraph();
         entry = fun.exit;
-
         n.fun_body.accept(this);
-
         fun.body = graph;
         fun.entry = entry;
     }
@@ -290,7 +273,6 @@ public class ToRTL implements Visitor {
     @Override
     public void visit(File n) {
         file = new RTLfile();
-
         for (Decl_fun f : n.funs) {
             f.accept(this);
             file.funs.add(fun);

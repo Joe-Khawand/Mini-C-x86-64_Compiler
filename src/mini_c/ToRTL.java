@@ -89,7 +89,6 @@ public class ToRTL implements Visitor {
 
     @Override
     public void visit(Eassign_local n) {
-        // On ne garde pas le résultat si on en a pas besoin
         if (currentRegister != null)
             entry = graph.add(new Rmbinop(Mbinop.Mmov, vars.get(n.i), currentRegister, entry));
         currentRegister = vars.get(n.i);

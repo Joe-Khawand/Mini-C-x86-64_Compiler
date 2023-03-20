@@ -118,6 +118,7 @@ class Field {
 class Decl_var {
 	public Typ t;
 	public String name;
+	public Register register = new Register();
 
 	Decl_var(Typ t, String i) {
 		this.t = t;

@@ -4,6 +4,7 @@
 // la commande 'make' recompile mini-c (si nécessaire)
 // et le lance sur ce fichier
 
-int main() {
+int main()
+{
   return 0;
 }
